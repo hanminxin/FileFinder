@@ -6,7 +6,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -50,24 +49,30 @@ Thumbs.db
 .AppleDouble
 .LSOverride
 
-# Project specific
+# Project specific - User data
 .file_finder_cache/
 .file_finder_config.json
-test_result.txt
-test_search.py
 
-# Compiled files
-*.pyo
-*.pyd
-*.c
-*.o
-*.a
-*.so
-*.sh
-*.exe
+# Project specific - Test files
+test_*.py
+test_*.txt
+*_test.py
+*_test.txt
+
+# Build outputs
+build/
+dist/
+*.spec
 
 # Temporary files
 *.tmp
 *.temp
 *~
 .~*
+*.bak
+*.log
+
+# Don't ignore these specific files
+!FileFinder.spec
+!requirements.txt
+!README.md
