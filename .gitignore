@@ -19,12 +19,21 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+coverage.xml
+*.cover
 
 # Virtual Environment
 .venv/
 venv/
 ENV/
 env/
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
@@ -32,11 +41,33 @@ env/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+.AppleDouble
+.LSOverride
 
 # Project specific
 .file_finder_cache/
 .file_finder_config.json
+test_result.txt
+test_search.py
+
+# Compiled files
+*.pyo
+*.pyd
+*.c
+*.o
+*.a
+*.so
+*.sh
+*.exe
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.~*

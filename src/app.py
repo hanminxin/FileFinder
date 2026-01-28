@@ -406,7 +406,8 @@ class FileFinderApp:
 2. 关键字搜索
    • 在"关键字"输入框输入要搜索的文本
    • 多个关键字用空格分隔，需全部匹配（AND逻辑）
-   • 使用引号包裹短语：如 "hello world" 作为整体搜索
+   • 使用引号包裹短语：如 "hello world" 或 "hello world" 作为整体搜索
+   • 支持中英文引号：英文 ""  ''  或中文 ""  ''
    • 搜索不区分大小写
    • 示例：输入 python test 只查找同时包含"python"和"test"的文件
 

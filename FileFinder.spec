@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app.py'],
+    ['src\\app.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -35,5 +35,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['d4feb5c153024d23a39309d5a626613f_0_visibleWatermark.png'],
 )
