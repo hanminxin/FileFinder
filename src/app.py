@@ -318,14 +318,41 @@ class FileFinderApp:
     def open_file(self, filepath):
         """打开文件"""
         try:
-            subprocess.Popen(f'start "{filepath}"', shell=True)
+            # 检查文件是否存在
+            if not os.path.isfile(filepath):
+                messagebox.showerror("错误", f"文件不存在: {filepath}")
+                return
+            
+            # 转换为标准Windows路径
+            win_filepath = os.path.abspath(filepath)
+            # 使用系统默认程序打开
+            subprocess.Popen(f'start "" "{win_filepath}"', shell=True)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开文件: {str(e)}")
     
     def open_folder(self, filepath):
         """打开文件所在的文件夹"""
         try:
-            subprocess.Popen(f'explorer /select,"{filepath}"', shell=True)
+            # 获取文件所在目录
+            folder_path = os.path.dirname(filepath)
+            
+            # 规范化路径（处理正斜杠等问题）
+            folder_path = os.path.abspath(folder_path)
+            
+            # 检查文件夹是否存在
+            if not os.path.isdir(folder_path):
+                messagebox.showerror("错误", f"文件夹不存在: {folder_path}")
+                return
+            
+            # 方法1：使用explorer打开文件夹并选中文件
+            try:
+                # 转换为标准Windows路径
+                win_filepath = os.path.abspath(filepath)
+                # 使用/select参数选中文件
+                subprocess.Popen(f'explorer /select,"{win_filepath}"', shell=True)
+            except:
+                # 方法2：直接打开文件夹
+                subprocess.Popen(f'explorer "{folder_path}"', shell=True)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开文件夹: {str(e)}")
     
