@@ -5,10 +5,12 @@ from tkinter import messagebox
 
 
 class FileSearcher:
-    """文件搜索引擎"""
+    """文件搜索引擎（优化版）"""
     
     def __init__(self, max_workers=None):
-        self.executor = ThreadPoolExecutor(max_workers=max_workers or os.cpu_count() or 4)
+        # 增加线程数以提高并行度（CPU核心数的2-3倍）
+        default_workers = (os.cpu_count() or 4) * 3
+        self.executor = ThreadPoolExecutor(max_workers=max_workers or default_workers)
         self.is_searching = False
     
     def is_ascii_file(self, filepath):
@@ -76,86 +78,62 @@ class FileSearcher:
             return False
     
     def search_file(self, filepath, keywords):
-        """在单个文件中搜索所有关键字"""
+        """在单个文件中搜索所有关键字（优化版）"""
         try:
-            # 检查是否为 ASCII 文件
-            if not self.is_ascii_file(filepath):
-                return None
-            
+            # 快速检查文件扩展名，跳过明显的二进制文件
             ext = os.path.splitext(filepath)[1].lower()
-            
-            # 对于.dat文件，尝试二进制搜索
-            if ext == '.dat':
-                try:
-                    with open(filepath, 'rb') as f:
-                        content_bytes = f.read()
-                    
-                    # 检查所有关键字是否存在（不区分大小写）
-                    all_found = True
-                    for keyword in keywords:
-                        keyword_lower = keyword.lower()
-                        keyword_bytes_utf8 = keyword_lower.encode('utf-8')
-                        keyword_bytes_gbk = None
-                        try:
-                            keyword_bytes_gbk = keyword_lower.encode('gbk')
-                        except:
-                            pass
-                        
-                        found = keyword_bytes_utf8 in content_bytes
-                        if not found and keyword_bytes_gbk:
-                            found = keyword_bytes_gbk in content_bytes
-                        
-                        # 也尝试直接搜索小写版本
-                        if not found:
-                            try:
-                                content_str = content_bytes.decode('utf-8', errors='ignore').lower()
-                                if keyword_lower in content_str:
-                                    found = True
-                            except:
-                                pass
-                        
-                        if not found:
-                            try:
-                                content_str = content_bytes.decode('gbk', errors='ignore').lower()
-                                if keyword_lower in content_str:
-                                    found = True
-                            except:
-                                pass
-                        
-                        if not found:
-                            all_found = False
-                            break
-                    
-                    if all_found:
-                        size_kb = os.path.getsize(filepath) / 1024
-                        return (filepath, size_kb)
-                    return None
-                except Exception:
-                    pass
-            
-            # 对于其他文件，尝试多种编码读取
-            encodings = ['utf-8', 'gbk', 'gb2312', 'latin-1', 'cp1252']
-            content = None
-            
-            for encoding in encodings:
-                try:
-                    with open(filepath, 'r', encoding=encoding, errors='ignore') as f:
-                        content = f.read().lower()
-                    break
-                except Exception:
-                    continue
-            
-            # 如果所有编码都失败，跳过此文件
-            if content is None:
+            if ext in {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar', 
+                      '.exe', '.dll', '.jpg', '.png', '.gif', '.mp4', '.mp3'}:
                 return None
             
-            # 检查是否包含所有关键字
-            if all(keyword.lower() in content for keyword in keywords):
-                # 获取文件大小（KB）
-                size_kb = os.path.getsize(filepath) / 1024
-                return (filepath, size_kb)
+            # 获取文件大小，跳过过大的文件（超过10MB）
+            try:
+                file_size = os.path.getsize(filepath)
+                if file_size > 10 * 1024 * 1024:  # 10MB
+                    return None
+                if file_size == 0:
+                    return None
+            except:
+                return None
             
-            return None
+            # 对于.dat文件和其他文件使用统一的优化搜索策略
+            # 读取文件内容（二进制模式，避免编码错误）
+            try:
+                with open(filepath, 'rb') as f:
+                    content_bytes = f.read()
+            except:
+                return None
+            
+            # 快速检测是否为纯二进制文件（检查null字节比例）
+            if ext != '.dat':  # .dat允许包含二进制
+                null_count = content_bytes[:min(8192, len(content_bytes))].count(b'\x00')
+                if null_count > 100:  # 太多null字节，跳过
+                    return None
+            
+            # 转换为小写字符串用于搜索（只做一次）
+            content_str = None
+            try:
+                # 先尝试UTF-8（最常见）
+                content_str = content_bytes.decode('utf-8', errors='ignore').lower()
+            except:
+                try:
+                    # 再尝试GBK
+                    content_str = content_bytes.decode('gbk', errors='ignore').lower()
+                except:
+                    return None
+            
+            if not content_str:
+                return None
+            
+            # 检查是否包含所有关键字（短路求值，找不到立即返回）
+            for keyword in keywords:
+                if keyword.lower() not in content_str:
+                    return None
+            
+            # 所有关键字都找到了
+            size_kb = file_size / 1024
+            return (filepath, size_kb)
+            
         except Exception:
             return None
     
@@ -215,7 +193,8 @@ class FileSearcher:
             future = self.executor.submit(self.search_file, filepath, keywords)
             futures.append(future)
         
-        # 收集结果
+        # 收集结果（优化进度更新频率）
+        update_interval = max(1, total_files // 100)  # 最多更新100次
         for future in as_completed(futures):
             if not self.is_searching:
                 break
@@ -230,8 +209,9 @@ class FileSearcher:
                 result_callback(filepath, size_kb)
                 stats_callback(found_count)
             
-            # 更新进度（每处理一个文件就更新）
-            progress_callback(f"已搜索 {processed}/{total_files} 个文件，找到 {found_count} 个", processed, total_files)
+            # 减少进度更新频率（每处理多个文件更新一次，或找到结果时立即更新）
+            if processed % update_interval == 0 or result or processed == total_files:
+                progress_callback(f"已搜索 {processed}/{total_files} 个文件，找到 {found_count} 个", processed, total_files)
         
         progress_callback(f"搜索完成！共处理 {processed} 个文件，找到 {found_count} 个匹配文件", processed, total_files)
         self.is_searching = False
