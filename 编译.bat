@@ -22,7 +22,7 @@ echo.
 REM 开始编译
 echo 正在编译，请稍候...
 echo.
-pyinstaller --onefile --windowed --name=FileFinder src\app.py
+pyinstaller --onefile --windowed --icon=icon.ico --name=FileFinder src\app.py
 
 echo.
 if exist "dist\FileFinder.exe" (
