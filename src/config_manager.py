@@ -8,6 +8,7 @@ class ConfigManager:
     
     def __init__(self, config_file):
         self.config_file = config_file
+        self.config = self.load_config()  # 在初始化时加载配置
     
     def save_config(self, folder_path, keywords, extensions, search_history=None):
         """保存配置到文件"""
@@ -107,5 +108,36 @@ class ConfigManager:
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+    
+    def add_exclude_history(self, exclude_text):
+        """添加排除关键字历史"""
+        text = (exclude_text or "").strip()
+        if not text:
+            return
+
+        config = self.load_config()
+        history = config.get("exclude_history", [])
+
+        if text in history:
+            history.remove(text)
+
+        history.insert(0, text)
+        history = history[:10]
+
+        config["exclude_history"] = history
+
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+    
+    def save_config_to_file(self):
+        """直接将当前配置保存到文件"""
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
         except Exception:
             pass

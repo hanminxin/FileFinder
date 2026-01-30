@@ -28,6 +28,10 @@ class FileFinderApp:
         # 当前搜索结果（用于排序）
         self.current_results = []
         
+        # 排除关键字框的显示状态
+        self.exclude_frame = None
+        self.exclude_visible = False
+        
         self.setup_ui()
         self.load_config()
         
@@ -70,6 +74,17 @@ class FileFinderApp:
         self.extensions_combobox.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
         ttk.Label(main_frame, text='(可选，多个用空格分隔如: .py .txt .log)').grid(row=2, column=2, sticky=tk.W, pady=5)
         
+        # 排除关键字框（初始隐藏）
+        self.exclude_frame = ttk.LabelFrame(main_frame, text="排除关键字（可选）", padding="5")
+        # 不显示排除框，初始状态下隐藏
+        # row号会动态更新
+        
+        ttk.Label(self.exclude_frame, text="排除关键字:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.exclude_var = tk.StringVar()
+        self.exclude_combobox = ttk.Combobox(self.exclude_frame, textvariable=self.exclude_var, width=58)
+        self.exclude_combobox.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
+        ttk.Label(self.exclude_frame, text='(空格分隔，匹配任一关键字则排除)').grid(row=0, column=2, sticky=tk.W, pady=5)
+        
         # 搜索按钮
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=3, column=0, columnspan=3, pady=10)
@@ -78,10 +93,13 @@ class FileFinderApp:
         self.stop_button = ttk.Button(button_frame, text="停止搜索 (Esc)", command=self.stop_search, state=tk.DISABLED)
         self.stop_button.pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="清空结果", command=self.clear_results).pack(side=tk.LEFT, padx=5)
+        self.toggle_exclude_btn = ttk.Button(button_frame, text="高级选项 ▼", command=self.toggle_exclude_frame)
+        self.toggle_exclude_btn.pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="帮助", command=self.show_help).pack(side=tk.LEFT, padx=5)
         
-        # 进度显示
+        # 进度显示 (隐藏排除框时行号为4，显示时为5)
         progress_frame = ttk.Frame(main_frame)
+        self.progress_frame = progress_frame
         progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
         self.progress_label = ttk.Label(progress_frame, text="就绪")
         self.progress_label.pack(side=tk.LEFT, padx=5)
@@ -90,6 +108,7 @@ class FileFinderApp:
         
         # 结果显示区域（表格视图）
         result_frame = ttk.LabelFrame(main_frame, text="搜索结果", padding="5")
+        self.result_frame = result_frame
         result_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         result_frame.columnconfigure(0, weight=1)
         result_frame.rowconfigure(0, weight=1)
@@ -121,6 +140,7 @@ class FileFinderApp:
         
         # 排序按钮
         sort_frame = ttk.Frame(main_frame)
+        self.sort_frame = sort_frame
         sort_frame.grid(row=6, column=0, columnspan=3, sticky=tk.W, pady=5)
         ttk.Label(sort_frame, text="排序:").pack(side=tk.LEFT, padx=5)
         ttk.Button(sort_frame, text="按大小升序", command=self.sort_by_size_asc).pack(side=tk.LEFT, padx=5)
@@ -129,8 +149,10 @@ class FileFinderApp:
         # 统计信息
         self.stats_label = ttk.Label(main_frame, text="找到 0 个文件")
         self.stats_label.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=5)
+        self.stats_row = 7
 
         instruction_frame = ttk.LabelFrame(main_frame, text="使用说明", padding="8")
+        self.instruction_frame = instruction_frame
         instruction_frame.grid(row=8, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=8)
         instruction_text = (
             "1. 选择文件夹并输入关键字（空格分隔，需全部匹配）。\n"
@@ -185,6 +207,14 @@ class FileFinderApp:
         self.config_manager.add_extension_history(extensions_text)
         self.update_extension_history_ui()
         
+        # 解析排除关键字
+        exclude_text = self.exclude_var.get().strip()
+        exclude_keywords = parse_keywords(exclude_text) if exclude_text else []
+        # 如果有排除关键字，保存到历史
+        if exclude_text:
+            self.config_manager.add_exclude_history(exclude_text)
+        self.update_exclude_history_ui()
+        
         # 清空之前的结果
         self.clear_results()
         
@@ -201,7 +231,7 @@ class FileFinderApp:
         # 在新线程中执行搜索
         def search_thread_func():
             results = self.searcher.search_files_parallel(
-                folder, keywords, extensions,
+                folder, keywords, extensions, exclude_keywords,
                 self.cache_manager,
                 self.update_progress,
                 self.display_result,
@@ -397,6 +427,27 @@ class FileFinderApp:
         history = config.get("extension_history", [])
         self.extensions_combobox['values'] = history
     
+    def update_exclude_history_ui(self):
+        """更新排除关键字历史下拉框"""
+        config = self.config_manager.load_config()
+        history = config.get("exclude_history", [])
+        self.exclude_combobox['values'] = history
+    
+    def toggle_exclude_frame(self):
+        """切换排除关键字框的显示/隐藏"""
+        if self.exclude_visible:
+            # 隐藏排除框
+            self.exclude_frame.grid_forget()
+            self.exclude_visible = False
+            self.toggle_exclude_btn.config(text="高级选项 ▼")
+        else:
+            # 显示排除框
+            self.exclude_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=0, pady=5)
+            self.exclude_visible = True
+            self.toggle_exclude_btn.config(text="高级选项 ▲")
+            # 更新排除历史
+            self.update_exclude_history_ui()
+    
     def show_help(self):
         """显示帮助窗口"""
         help_window = tk.Toplevel(self.root)
@@ -539,6 +590,11 @@ A: 不区分，"Test"和"test"的搜索结果相同。
             self.keywords_var.get(),
             self.extensions_var.get()
         )
+        # 保存排除关键字
+        exclude_text = self.exclude_var.get().strip()
+        if exclude_text:
+            self.config_manager.config['exclude_keywords'] = exclude_text
+            self.config_manager.save_config_to_file()
     
     def load_config(self):
         """加载配置"""
@@ -549,11 +605,14 @@ A: 不区分，"Test"和"test"的搜索结果相同。
             self.keywords_var.set(config["keywords"])
         if config.get("extensions"):
             self.extensions_var.set(config["extensions"])
+        if config.get("exclude_keywords"):
+            self.exclude_var.set(config["exclude_keywords"])
         
         # 加载搜索历史
         self.update_search_history()
         self.update_folder_history_ui()
         self.update_extension_history_ui()
+        self.update_exclude_history_ui()
     
     def clear_cache(self):
         """清理缓存和配置"""

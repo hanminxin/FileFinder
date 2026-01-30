@@ -77,8 +77,8 @@ class FileSearcher:
         except Exception:
             return False
     
-    def search_file(self, filepath, keywords):
-        """在单个文件中搜索所有关键字（优化版）"""
+    def search_file(self, filepath, keywords, exclude_keywords=None):
+        """在单个文件中搜索所有关键字，并排除包含排除关键字的文件（优化版）"""
         try:
             # 快速检查文件扩展名，跳过明显的二进制文件
             ext = os.path.splitext(filepath)[1].lower()
@@ -130,7 +130,13 @@ class FileSearcher:
                 if keyword.lower() not in content_str:
                     return None
             
-            # 所有关键字都找到了
+            # 检查排除关键字：如果包含任何排除关键字，则排除该文件
+            if exclude_keywords:
+                for exclude_kw in exclude_keywords:
+                    if exclude_kw.lower() in content_str:
+                        return None
+            
+            # 所有关键字都找到了，且不包含排除关键字
             size_kb = file_size / 1024
             return (filepath, size_kb)
             
@@ -148,7 +154,7 @@ class FileSearcher:
             messagebox.showerror("错误", f"访问文件夹时出错: {str(e)}")
         return all_files
     
-    def search_files_parallel(self, folder_path, keywords, extensions, 
+    def search_files_parallel(self, folder_path, keywords, extensions, exclude_keywords,
                             cache_manager,
                             progress_callback, result_callback, stats_callback):
         """并行搜索文件（每次都重新搜索内容，仅缓存文件列表）"""
@@ -190,7 +196,7 @@ class FileSearcher:
         for filepath in all_files:
             if not self.is_searching:
                 break
-            future = self.executor.submit(self.search_file, filepath, keywords)
+            future = self.executor.submit(self.search_file, filepath, keywords, exclude_keywords)
             futures.append(future)
         
         # 收集结果（优化进度更新频率）
