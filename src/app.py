@@ -71,13 +71,16 @@ class FileFinderApp:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # 配置网格权重
+        # 配置网格权重 - 统一设置所有可能的行
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        # 设置结果区域能扩展（无论排除框是否展开）
-        main_frame.rowconfigure(5, weight=1)  # 排除框隐藏时结果框在row=5
-        main_frame.rowconfigure(6, weight=1)  # 排除框展开时结果框在row=6
+        # 设置所有可能的行高
+        for i in range(10):
+            main_frame.rowconfigure(i, weight=0)
+        # 结果框需要扩展空间，两种状态下都需要
+        main_frame.rowconfigure(5, weight=1)  # 排除框隐藏时
+        main_frame.rowconfigure(6, weight=1)  # 排除框展开时
         self.main_frame = main_frame  # 保存引用
         
         # 文件夹路径选择（下拉历史）
