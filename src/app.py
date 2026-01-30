@@ -685,16 +685,12 @@ A: 不区分，"Test"和"test"的搜索结果相同。
         """加载配置"""
         config = self.config_manager.load_config()
         
-        # 恢复上次搜索的字段状态
+        # 恢复上次搜索的字段状态（无论是否为空都要设置）
         last_state = self.config_manager.get_last_search_state()
-        if last_state.get("folder_path"):
-            self.folder_var.set(last_state["folder_path"])
-        if last_state.get("keywords"):
-            self.keywords_var.set(last_state["keywords"])
-        if last_state.get("extensions"):
-            self.extensions_var.set(last_state["extensions"])
-        if last_state.get("exclude_keywords"):
-            self.exclude_var.set(last_state["exclude_keywords"])
+        self.folder_var.set(last_state.get("folder_path", ""))
+        self.keywords_var.set(last_state.get("keywords", ""))
+        self.extensions_var.set(last_state.get("extensions", ""))
+        self.exclude_var.set(last_state.get("exclude_keywords", ""))
         
         # 加载搜索历史到下拉框
         self.update_search_history()
