@@ -28,13 +28,13 @@ find/
 ├── assets/                   # 资源文件
 │   ├── icon.ico             # 应用图标
 │   └── icon.png             # 原始图标
-├── scripts/                  # 脚本
-│   ├── 编译.bat              # Windows 编译脚本
-│   └── 运行.bat              # Windows 运行脚本
+├── scripts/                  # 旧脚本（保留用于参考）
 ├── tools/                    # 开发工具
 │   ├── convert_icon.py       # 图标转换脚本
 │   └── FileFinder.spec       # PyInstaller 配置文件
 ├── dist/                     # 编译生成的可执行文件
+├── 编译.bat                   # Windows 编译脚本（UTF-8编码）
+├── 运行.bat                   # Windows 运行脚本（UTF-8编码）
 ├── .venv/                    # Python 虚拟环境（本地开发）
 ├── .gitignore               # Git 忽略文件
 └── README.md                # 本文件
@@ -57,11 +57,11 @@ find/
    python -m venv .venv
    .venv\Scripts\activate
    ```
-3. 双击 `scripts\运行.bat` 启动应用
+3. 双击根目录的 `运行.bat` 启动应用
 
 ### 编译成可执行文件
 
-双击 `scripts\编译.bat` 即可生成 `dist/FileFinder.exe`
+双击根目录的 `编译.bat` 即可生成 `dist/FileFinder.exe`
 
 **要求**：
 - Python 3.9+
