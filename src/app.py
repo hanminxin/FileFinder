@@ -488,6 +488,9 @@ class FileFinderApp:
             # 恢复原始的rowconfigure权重（结果框在row=5）
             self.main_frame.rowconfigure(5, weight=1)
             self.main_frame.rowconfigure(6, weight=0)
+            self.main_frame.rowconfigure(7, weight=0)
+            self.main_frame.rowconfigure(8, weight=0)
+            self.main_frame.rowconfigure(9, weight=0)
             # 隐藏后恢复原始行号
             self.button_frame.grid(row=3, column=0, columnspan=3, pady=10)
             self.progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
@@ -503,6 +506,9 @@ class FileFinderApp:
             # 更新rowconfigure权重（结果框现在在row=6）
             self.main_frame.rowconfigure(5, weight=0)
             self.main_frame.rowconfigure(6, weight=1)
+            self.main_frame.rowconfigure(7, weight=0)
+            self.main_frame.rowconfigure(8, weight=0)
+            self.main_frame.rowconfigure(9, weight=0)
             # 显示后调整所有元素的行号
             self.button_frame.grid(row=4, column=0, columnspan=3, pady=10)  # 搜索按钮移到row=4
             self.progress_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
