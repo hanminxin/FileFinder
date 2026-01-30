@@ -87,7 +87,8 @@ class FileFinderApp:
         
         # 搜索按钮
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=3, pady=10)
+        self.button_frame = button_frame  # 保存引用以便动态调整
+        button_frame.grid(row=4, column=0, columnspan=3, pady=10)  # 初始在row=4（排除框隐藏）
         self.search_button = ttk.Button(button_frame, text="开始搜索 (Enter)", command=self.start_search)
         self.search_button.pack(side=tk.LEFT, padx=5)
         self.stop_button = ttk.Button(button_frame, text="停止搜索 (Esc)", command=self.stop_search, state=tk.DISABLED)
@@ -440,11 +441,25 @@ class FileFinderApp:
             self.exclude_frame.grid_forget()
             self.exclude_visible = False
             self.toggle_exclude_btn.config(text="高级选项 ▼")
+            # 隐藏后恢复原始行号
+            self.button_frame.grid(row=4, column=0, columnspan=3, pady=10)
+            self.progress_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+            self.result_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+            self.sort_frame.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=5)
+            self.stats_label.grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=5)
+            self.instruction_frame.grid(row=9, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=8)
         else:
-            # 显示排除框
-            self.exclude_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=0, pady=5)
+            # 显示排除框（在后缀名框之后）
+            self.exclude_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=0, pady=5)
             self.exclude_visible = True
             self.toggle_exclude_btn.config(text="高级选项 ▲")
+            # 显示后调整所有元素的行号
+            self.button_frame.grid(row=4, column=0, columnspan=3, pady=10)  # 搜索按钮保持在row=4
+            self.progress_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+            self.result_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+            self.sort_frame.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=5)
+            self.stats_label.grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=5)
+            self.instruction_frame.grid(row=9, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=8)
             # 更新排除历史
             self.update_exclude_history_ui()
     
