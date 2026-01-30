@@ -16,7 +16,7 @@ class FileFinderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("文件搜索工具")
-        self.root.geometry("1000x700")
+        self.root.geometry("1000x750")  # 增加高度以容纳排序按钮
         
         # 初始化管理器
         config_file = os.path.join(os.path.expanduser("~"), ".file_finder_config.json")
@@ -78,9 +78,8 @@ class FileFinderApp:
         # 设置所有可能的行高
         for i in range(10):
             main_frame.rowconfigure(i, weight=0)
-        # 结果框需要扩展空间，两种状态下都需要
-        main_frame.rowconfigure(5, weight=1)  # 排除框隐藏时
-        main_frame.rowconfigure(6, weight=1)  # 排除框展开时
+        # 不设置任何行为weight=1，让所有内容按需要显示，最后留出扩展空间
+        main_frame.rowconfigure(9, weight=1)  # 最后一行留出扩展空间
         self.main_frame = main_frame  # 保存引用
         
         # 文件夹路径选择（下拉历史）
@@ -143,14 +142,14 @@ class FileFinderApp:
         # 结果显示区域（表格视图）
         result_frame = ttk.LabelFrame(main_frame, text="搜索结果", padding="5")
         self.result_frame = result_frame
-        # 不用N, S sticky，让它只占用需要的空间，不会压缩下面的按钮
+        # 只在水平方向扩展，不在垂直方向扩展
         result_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
         result_frame.columnconfigure(0, weight=1)
         result_frame.rowconfigure(0, weight=1)
         
-        # 创建表格，高度改为15以给排序框留出空间
+        # 创建表格，使用固定高度（约10行显示）
         columns = ('filename', 'path', 'size')
-        self.result_tree = ttk.Treeview(result_frame, columns=columns, show='headings', height=15)
+        self.result_tree = ttk.Treeview(result_frame, columns=columns, show='headings', height=10)
         
         # 定义列标题
         self.result_tree.heading('filename', text='文件名')
@@ -489,12 +488,12 @@ class FileFinderApp:
             self.exclude_frame.grid_forget()
             self.exclude_visible = False
             self.toggle_exclude_btn.config(text="高级选项 ▼")
-            # 恢复原始的rowconfigure权重（结果框在row=5）
-            self.main_frame.rowconfigure(5, weight=1)
+            # 恢复原始的rowconfigure权重
+            self.main_frame.rowconfigure(5, weight=0)
             self.main_frame.rowconfigure(6, weight=0)
             self.main_frame.rowconfigure(7, weight=0)
             self.main_frame.rowconfigure(8, weight=0)
-            self.main_frame.rowconfigure(9, weight=0)
+            self.main_frame.rowconfigure(9, weight=1)  # 最后一行留出扩展空间
             # 隐藏后恢复原始行号
             self.button_frame.grid(row=3, column=0, columnspan=3, pady=10)
             self.progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
@@ -507,12 +506,12 @@ class FileFinderApp:
             self.exclude_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=0, pady=5)
             self.exclude_visible = True
             self.toggle_exclude_btn.config(text="高级选项 ▲")
-            # 更新rowconfigure权重（结果框现在在row=6）
+            # 更新rowconfigure权重
             self.main_frame.rowconfigure(5, weight=0)
-            self.main_frame.rowconfigure(6, weight=1)
+            self.main_frame.rowconfigure(6, weight=0)
             self.main_frame.rowconfigure(7, weight=0)
             self.main_frame.rowconfigure(8, weight=0)
-            self.main_frame.rowconfigure(9, weight=0)
+            self.main_frame.rowconfigure(9, weight=1)  # 最后一行留出扩展空间
             # 显示后调整所有元素的行号
             self.button_frame.grid(row=4, column=0, columnspan=3, pady=10)  # 搜索按钮移到row=4
             self.progress_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
@@ -665,29 +664,39 @@ A: 不区分，"Test"和"test"的搜索结果相同。
     
     def save_config(self):
         """保存配置"""
-        self.config_manager.save_config(
-            self.folder_var.get(),
-            self.keywords_var.get(),
-            self.extensions_var.get()
-        )
-        # 保存排除关键字
+        folder_path = self.folder_var.get()
+        keywords = self.keywords_var.get()
+        extensions = self.extensions_var.get()
         exclude_text = self.exclude_var.get().strip()
+        
+        # 保存当前搜索字段状态
+        self.config_manager.save_last_search_state(
+            folder_path,
+            keywords,
+            extensions,
+            exclude_text
+        )
+        
+        # 保存排除关键字
         self.config_manager.config['exclude_keywords'] = exclude_text
         self.config_manager.save_config_to_file()
     
     def load_config(self):
         """加载配置"""
         config = self.config_manager.load_config()
-        if config.get("folder_path"):
-            self.folder_var.set(config["folder_path"])
-        if config.get("keywords"):
-            self.keywords_var.set(config["keywords"])
-        if config.get("extensions"):
-            self.extensions_var.set(config["extensions"])
-        if config.get("exclude_keywords"):
-            self.exclude_var.set(config["exclude_keywords"])
         
-        # 加载搜索历史
+        # 恢复上次搜索的字段状态
+        last_state = self.config_manager.get_last_search_state()
+        if last_state.get("folder_path"):
+            self.folder_var.set(last_state["folder_path"])
+        if last_state.get("keywords"):
+            self.keywords_var.set(last_state["keywords"])
+        if last_state.get("extensions"):
+            self.extensions_var.set(last_state["extensions"])
+        if last_state.get("exclude_keywords"):
+            self.exclude_var.set(last_state["exclude_keywords"])
+        
+        # 加载搜索历史到下拉框
         self.update_search_history()
         self.update_folder_history_ui()
         self.update_extension_history_ui()

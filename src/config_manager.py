@@ -43,7 +43,13 @@ class ConfigManager:
             "folder_history": [],
             "extension_history": [],
             "exclude_history": [],
-            "exclude_keywords": ""
+            "exclude_keywords": "",
+            "last_search_state": {
+                "folder_path": "",
+                "keywords": "",
+                "extensions": "",
+                "exclude_keywords": ""
+            }
         }
     
     def add_search_history(self, keywords):
@@ -147,3 +153,28 @@ class ConfigManager:
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+    
+    def save_last_search_state(self, folder_path, keywords, extensions, exclude_keywords):
+        """保存最后一次搜索的状态（用于窗口关闭时）"""
+        config = self.load_config()
+        config["last_search_state"] = {
+            "folder_path": folder_path,
+            "keywords": keywords,
+            "extensions": extensions,
+            "exclude_keywords": exclude_keywords
+        }
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+    
+    def get_last_search_state(self):
+        """获取最后一次搜索的状态"""
+        config = self.load_config()
+        return config.get("last_search_state", {
+            "folder_path": "",
+            "keywords": "",
+            "extensions": "",
+            "exclude_keywords": ""
+        })
