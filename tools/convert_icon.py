@@ -13,8 +13,10 @@ except ImportError:
     os.system(f"{sys.executable} -m pip install Pillow -q")
     from PIL import Image
 
-icon_path = r"d:\python_work\find\icon.png"
-ico_path = r"d:\python_work\find\icon.ico"
+base_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(base_dir, ".."))
+icon_path = os.path.join(project_root, "assets", "icon.png")
+ico_path = os.path.join(project_root, "assets", "icon.ico")
 
 try:
     print(f"打开图片: {icon_path}")

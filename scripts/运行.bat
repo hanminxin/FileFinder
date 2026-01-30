@@ -4,8 +4,9 @@ REM 此脚本会尝试用Python直接运行程序
 
 setlocal enabledelayedexpansion
 
-REM 获取脚本所在目录
+REM 获取脚本所在目录并切到项目根目录
 set SCRIPT_DIR=%~dp0
+set ROOT=%SCRIPT_DIR%..
 
 REM 尝试找到Python
 for /f "delims=" %%i in ('where python 2^>nul') do (
@@ -40,7 +41,7 @@ if not defined PYTHON (
 )
 
 REM 运行程序
-"%PYTHON%" "%SCRIPT_DIR%src\app.py"
+"%PYTHON%" "%ROOT%\src\app.py"
 if errorlevel 1 (
     echo.
     echo [错误] 程序运行失败

@@ -74,5 +74,6 @@ dist/
 
 # Don't ignore these specific files
 !FileFinder.spec
+!tools/FileFinder.spec
 !requirements.txt
 !README.md

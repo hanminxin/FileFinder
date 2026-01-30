@@ -13,6 +13,11 @@ if "%ERRORLEVEL%"=="0" (
     timeout /t 2 /nobreak >NUL
 )
 
+REM 获取脚本所在目录并切到项目根目录
+set SCRIPT_DIR=%~dp0
+set ROOT=%SCRIPT_DIR%..
+pushd "%ROOT%"
+
 REM 删除旧的构建文件
 echo 清理旧的构建文件...
 if exist "build" rmdir /s /q build
@@ -22,7 +27,7 @@ echo.
 REM 开始编译
 echo 正在编译，请稍候...
 echo.
-pyinstaller --onefile --windowed --icon=icon.ico --name=FileFinder src\app.py
+pyinstaller --onefile --windowed --icon=assets\icon.ico --name=FileFinder src\app.py
 
 echo.
 if exist "dist\FileFinder.exe" (
@@ -37,4 +42,5 @@ if exist "dist\FileFinder.exe" (
 )
 
 echo.
+popd
 pause
