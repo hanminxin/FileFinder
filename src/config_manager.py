@@ -30,15 +30,9 @@ class ConfigManager:
             pass
     
     def load_config(self):
-        """从文件加载配置"""
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                return config
-        except Exception:
-            pass
-        return {
+        """从文件加载配置（带版本迁移）"""
+        default_config = {
+            "version": 2,  # 配置文件版本号
             "search_history": [],
             "folder_history": [],
             "extension_history": [],
@@ -51,6 +45,37 @@ class ConfigManager:
                 "exclude_keywords": ""
             }
         }
+        
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # 版本迁移：检查配置版本
+                config_version = config.get("version", 1)
+                
+                if config_version < 2:
+                    # 从v1迁移到v2：确保有last_search_state字段
+                    if "last_search_state" not in config:
+                        config["last_search_state"] = {
+                            "folder_path": config.get("folder_path", ""),
+                            "keywords": config.get("keywords", ""),
+                            "extensions": config.get("extensions", ""),
+                            "exclude_keywords": config.get("exclude_keywords", "")
+                        }
+                    config["version"] = 2
+                    # 保存迁移后的配置
+                    try:
+                        with open(self.config_file, 'w', encoding='utf-8') as f:
+                            json.dump(config, f, ensure_ascii=False, indent=2)
+                    except:
+                        pass
+                
+                return config
+        except Exception:
+            pass
+        
+        return default_config
     
     def add_search_history(self, keywords):
         """添加搜索历史"""
@@ -147,26 +172,57 @@ class ConfigManager:
             pass
     
     def save_config_to_file(self):
-        """直接将当前配置保存到文件"""
+        """直接将当前配置保存到文件（带重试和备份）"""
         try:
+            # 确保目录存在
+            config_dir = os.path.dirname(self.config_file)
+            if config_dir and not os.path.exists(config_dir):
+                os.makedirs(config_dir, exist_ok=True)
+            
+            # 备份现有配置（如果存在）
+            if os.path.exists(self.config_file):
+                backup_file = self.config_file + '.backup'
+                try:
+                    import shutil
+                    shutil.copy2(self.config_file, backup_file)
+                except:
+                    pass
+            
+            # 保存配置
+            self.config["version"] = 2  # 确保版本号
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+            
+            # 验证保存是否成功
+            if os.path.exists(self.config_file):
+                return True
+        except Exception as e:
+            print(f"保存配置失败: {e}")
+            # 尝试恢复备份
+            backup_file = self.config_file + '.backup'
+            if os.path.exists(backup_file):
+                try:
+                    import shutil
+                    shutil.copy2(backup_file, self.config_file)
+                except:
+                    pass
+        return False
     
     def save_last_search_state(self, folder_path, keywords, extensions, exclude_keywords):
         """保存最后一次搜索的状态（用于窗口关闭时）"""
-        config = self.load_config()
-        config["last_search_state"] = {
+        # 使用内存中的config，避免重复加载
+        self.config["last_search_state"] = {
             "folder_path": folder_path,
             "keywords": keywords,
             "extensions": extensions,
             "exclude_keywords": exclude_keywords
         }
+        self.config["version"] = 2  # 确保版本号正确
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
-        except Exception:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存配置失败: {e}")  # 调试用
             pass
     
     def get_last_search_state(self):

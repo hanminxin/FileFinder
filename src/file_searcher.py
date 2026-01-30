@@ -7,8 +7,8 @@ class FileSearcher:
     """文件搜索引擎（优化版）"""
     
     def __init__(self, max_workers=None):
-        # 增加线程数以提高并行度（CPU核心数的2-3倍）
-        default_workers = (os.cpu_count() or 4) * 3
+        # 大幅增加线程数以提高并行度（I/O密集型任务，CPU核心数的4-8倍）
+        default_workers = (os.cpu_count() or 4) * 8
         self.executor = ThreadPoolExecutor(max_workers=max_workers or default_workers)
         self.is_searching = False
     
@@ -77,67 +77,90 @@ class FileSearcher:
             return False
     
     def search_file(self, filepath, keywords, exclude_keywords=None):
-        """在单个文件中搜索所有关键字，并排除包含排除关键字的文件（优化版）"""
+        """在单个文件中搜索所有关键字，并排除包含排除关键字的文件（高性能版）"""
         try:
             # 快速检查文件扩展名，跳过明显的二进制文件
             ext = os.path.splitext(filepath)[1].lower()
             if ext in {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar', 
-                      '.exe', '.dll', '.jpg', '.png', '.gif', '.mp4', '.mp3'}:
+                      '.exe', '.dll', '.jpg', '.png', '.gif', '.mp4', '.mp3', '.avi',
+                      '.bin', '.iso', '.dmg', '.tar', '.gz', '.7z', '.pyc', '.class'}:
                 return None
             
-            # 获取文件大小，跳过过大的文件（超过10MB）
+            # 获取文件大小，跳过过大的文件（超过50MB）和空文件
             try:
                 file_size = os.path.getsize(filepath)
-                if file_size > 10 * 1024 * 1024:  # 10MB
-                    return None
-                if file_size == 0:
+                if file_size > 50 * 1024 * 1024 or file_size == 0:
                     return None
             except:
                 return None
             
-            # 对于.dat文件和其他文件使用统一的优化搜索策略
-            # 读取文件内容（二进制模式，避免编码错误）
+            # 预先转换关键字为小写（避免重复转换）
+            keywords_lower = [kw.lower() for kw in keywords]
+            exclude_keywords_lower = [kw.lower() for kw in exclude_keywords] if exclude_keywords else []
+            
+            # 使用流式读取和快速搜索算法
+            chunk_size = 65536  # 64KB块
+            overlap_size = 1024  # 1KB重叠区防止跨块匹配
+            
+            found_keywords = set()
+            found_exclude = False
+            previous_chunk = b''
+            
             try:
                 with open(filepath, 'rb') as f:
-                    content_bytes = f.read()
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        
+                        # 与上一块的尾部合并，避免跨块匹配丢失
+                        search_chunk = previous_chunk + chunk
+                        
+                        # 快速二进制文件检测（只检查第一块）
+                        if not previous_chunk and ext != '.dat':
+                            null_count = search_chunk[:8192].count(b'\x00')
+                            if null_count > 100:
+                                return None
+                        
+                        # 尝试解码（UTF-8优先，失败则用latin-1保证不出错）
+                        try:
+                            text = search_chunk.decode('utf-8', errors='ignore').lower()
+                        except:
+                            try:
+                                text = search_chunk.decode('gbk', errors='ignore').lower()
+                            except:
+                                text = search_chunk.decode('latin-1').lower()
+                        
+                        # 先检查排除关键字（如果有）- 一旦找到立即返回
+                        if exclude_keywords_lower:
+                            for exclude_kw in exclude_keywords_lower:
+                                if exclude_kw in text:
+                                    return None
+                        
+                        # 检查所有待查找的关键字
+                        for kw in keywords_lower:
+                            if kw not in found_keywords and kw in text:
+                                found_keywords.add(kw)
+                        
+                        # 所有关键字都找到了，提前返回
+                        if len(found_keywords) == len(keywords_lower):
+                            size_kb = file_size / 1024
+                            return (filepath, size_kb)
+                        
+                        # 保存块尾部用于下次合并
+                        if len(chunk) == chunk_size:  # 不是最后一块
+                            previous_chunk = search_chunk[-overlap_size:]
+                        else:
+                            break
             except:
                 return None
             
-            # 快速检测是否为纯二进制文件（检查null字节比例）
-            if ext != '.dat':  # .dat允许包含二进制
-                null_count = content_bytes[:min(8192, len(content_bytes))].count(b'\x00')
-                if null_count > 100:  # 太多null字节，跳过
-                    return None
+            # 文件读完了，检查是否所有关键字都找到
+            if len(found_keywords) == len(keywords_lower):
+                size_kb = file_size / 1024
+                return (filepath, size_kb)
             
-            # 转换为小写字符串用于搜索（只做一次）
-            content_str = None
-            try:
-                # 先尝试UTF-8（最常见）
-                content_str = content_bytes.decode('utf-8', errors='ignore').lower()
-            except:
-                try:
-                    # 再尝试GBK
-                    content_str = content_bytes.decode('gbk', errors='ignore').lower()
-                except:
-                    return None
-            
-            if not content_str:
-                return None
-            
-            # 检查是否包含所有关键字（短路求值，找不到立即返回）
-            for keyword in keywords:
-                if keyword.lower() not in content_str:
-                    return None
-            
-            # 检查排除关键字：如果包含任何排除关键字，则排除该文件
-            if exclude_keywords:
-                for exclude_kw in exclude_keywords:
-                    if exclude_kw.lower() in content_str:
-                        return None
-            
-            # 所有关键字都找到了，且不包含排除关键字
-            size_kb = file_size / 1024
-            return (filepath, size_kb)
+            return None
             
         except Exception:
             return None
