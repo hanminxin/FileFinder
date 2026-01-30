@@ -143,13 +143,14 @@ class FileFinderApp:
         # 结果显示区域（表格视图）
         result_frame = ttk.LabelFrame(main_frame, text="搜索结果", padding="5")
         self.result_frame = result_frame
-        result_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        # 不用N, S sticky，让它只占用需要的空间，不会压缩下面的按钮
+        result_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
         result_frame.columnconfigure(0, weight=1)
         result_frame.rowconfigure(0, weight=1)
         
-        # 创建表格
+        # 创建表格，高度改为15以给排序框留出空间
         columns = ('filename', 'path', 'size')
-        self.result_tree = ttk.Treeview(result_frame, columns=columns, show='headings', height=20)
+        self.result_tree = ttk.Treeview(result_frame, columns=columns, show='headings', height=15)
         
         # 定义列标题
         self.result_tree.heading('filename', text='文件名')
@@ -497,7 +498,7 @@ class FileFinderApp:
             # 隐藏后恢复原始行号
             self.button_frame.grid(row=3, column=0, columnspan=3, pady=10)
             self.progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
-            self.result_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+            self.result_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
             self.sort_frame.grid(row=6, column=0, columnspan=3, sticky=tk.W, pady=5)
             self.stats_label.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=5)
             self.instruction_frame.grid(row=8, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=8)
@@ -515,7 +516,7 @@ class FileFinderApp:
             # 显示后调整所有元素的行号
             self.button_frame.grid(row=4, column=0, columnspan=3, pady=10)  # 搜索按钮移到row=4
             self.progress_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
-            self.result_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+            self.result_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
             self.sort_frame.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=5)
             self.stats_label.grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=5)
             self.instruction_frame.grid(row=9, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=8)
