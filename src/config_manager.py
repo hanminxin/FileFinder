@@ -1,6 +1,30 @@
 """配置管理模块"""
 import os
 import json
+import logging
+from datetime import datetime
+
+
+# 配置日志
+def setup_logging():
+    """设置日志系统"""
+    log_dir = os.path.join(os.path.expanduser("~"), ".file_finder_logs")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    
+    log_file = os.path.join(log_dir, f"app_{datetime.now().strftime('%Y%m%d')}.log")
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8'),
+            logging.StreamHandler()  # 同时输出到控制台
+        ]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
 
 
 class ConfigManager:
@@ -47,37 +71,37 @@ class ConfigManager:
         }
         
         if not os.path.exists(self.config_file):
-            print(f"配置文件不存在，使用默认配置: {self.config_file}")
+            logger.info(f"配置文件不存在，使用默认配置: {self.config_file}")
             return default_config
         
         try:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 if not content.strip():
-                    print("配置文件为空，使用默认配置")
+                    logger.warning("配置文件为空，使用默认配置")
                     return default_config
                 config = json.loads(content)
         except json.JSONDecodeError as e:
-            print(f"配置文件JSON格式错误: {e}")
+            logger.error(f"配置文件JSON格式错误: {e}")
             # 备份损坏的配置
             try:
                 backup_file = self.config_file + '.broken'
                 import shutil
                 shutil.copy2(self.config_file, backup_file)
-                print(f"已备份损坏的配置到: {backup_file}")
+                logger.info(f"已备份损坏的配置到: {backup_file}")
             except:
                 pass
             return default_config
         except Exception as e:
-            print(f"读取配置文件失败: {e}")
+            logger.error(f"读取配置文件失败: {e}")
             return default_config
         
         # 版本迁移：检查配置版本
         config_version = config.get("version", 1)
-        print(f"配置文件版本: v{config_version}")
+        logger.info(f"配置文件版本: v{config_version}")
         
         if config_version < 2:
-            print("检测到旧版本配置，开始迁移...")
+            logger.info("检测到旧版本配置，开始迁移...")
             # 从v1迁移到v2：确保有last_search_state字段
             if "last_search_state" not in config:
                 old_state = {
@@ -87,7 +111,7 @@ class ConfigManager:
                     "exclude_keywords": config.get("exclude_keywords", "")
                 }
                 config["last_search_state"] = old_state
-                print(f"迁移旧状态: folder={old_state['folder_path']}, keywords={old_state['keywords']}")
+                logger.info(f"迁移旧状态: folder={old_state['folder_path']}, keywords={old_state['keywords']}")
             
             config["version"] = 2
             
@@ -95,9 +119,9 @@ class ConfigManager:
             try:
                 with open(self.config_file, 'w', encoding='utf-8') as f:
                     json.dump(config, f, ensure_ascii=False, indent=2)
-                print("配置迁移成功！")
+                logger.info("配置迁移成功！")
             except Exception as e:
-                print(f"保存迁移后的配置失败: {e}")
+                logger.error(f"保存迁移后的配置失败: {e}")
         
         return config
     
@@ -221,13 +245,14 @@ class ConfigManager:
             if os.path.exists(self.config_file):
                 return True
         except Exception as e:
-            print(f"保存配置失败: {e}")
+            logger.error(f"保存配置失败: {e}")
             # 尝试恢复备份
             backup_file = self.config_file + '.backup'
             if os.path.exists(backup_file):
                 try:
                     import shutil
                     shutil.copy2(backup_file, self.config_file)
+                    logger.info("已从备份恢复配置")
                 except:
                     pass
         return False
@@ -245,8 +270,9 @@ class ConfigManager:
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
+            logger.info(f"已保存搜索状态: keywords={keywords}")
         except Exception as e:
-            print(f"保存配置失败: {e}")  # 调试用
+            logger.error(f"保存配置失败: {e}")
             pass
     
     def get_last_search_state(self):
