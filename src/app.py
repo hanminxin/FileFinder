@@ -3,6 +3,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext, messagebox
 import threading
+from queue import Queue, Empty
 import subprocess
 
 from cache_manager import CacheManager
@@ -31,6 +32,9 @@ class FileFinderApp:
         # 排除关键字框的显示状态
         self.exclude_frame = None
         self.exclude_visible = False
+
+        # UI队列（确保线程安全更新UI）
+        self.ui_queue = Queue()
         
         self.setup_ui()
         self.load_config()
@@ -41,6 +45,26 @@ class FileFinderApp:
         
         # 程序关闭时保存配置
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        # 启动UI队列处理
+        self.root.after(50, self.process_ui_queue)
+
+    def run_on_ui_thread(self, func, *args, **kwargs):
+        """将UI更新任务投递到主线程"""
+        self.ui_queue.put((func, args, kwargs))
+
+    def process_ui_queue(self):
+        """处理UI队列中的任务"""
+        try:
+            while True:
+                func, args, kwargs = self.ui_queue.get_nowait()
+                try:
+                    func(*args, **kwargs)
+                except Exception:
+                    pass
+        except Empty:
+            pass
+        self.root.after(50, self.process_ui_queue)
     
     def setup_ui(self):
         # 主框架
@@ -51,7 +75,10 @@ class FileFinderApp:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(5, weight=1)
+        # 设置结果区域能扩展（无论排除框是否展开）
+        main_frame.rowconfigure(5, weight=1)  # 排除框隐藏时结果框在row=5
+        main_frame.rowconfigure(6, weight=1)  # 排除框展开时结果框在row=6
+        self.main_frame = main_frame  # 保存引用
         
         # 文件夹路径选择（下拉历史）
         ttk.Label(main_frame, text="文件夹路径:").grid(row=0, column=0, sticky=tk.W, pady=5)
@@ -78,6 +105,9 @@ class FileFinderApp:
         self.exclude_frame = ttk.LabelFrame(main_frame, text="排除关键字（可选）", padding="5")
         # 不显示排除框，初始状态下隐藏
         # row号会动态更新
+        
+        # 设置列权重，使输入框宽度与其他行一致
+        self.exclude_frame.columnconfigure(1, weight=1)
         
         ttk.Label(self.exclude_frame, text="排除关键字:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.exclude_var = tk.StringVar()
@@ -228,21 +258,35 @@ class FileFinderApp:
         
         # 保存配置
         self.save_config()
+
+        # 线程安全的UI回调
+        def safe_update_progress(message, current=0, total=0):
+            self.run_on_ui_thread(self.update_progress, message, current, total)
+
+        def safe_display_result(filepath, size_kb):
+            self.run_on_ui_thread(self.display_result, filepath, size_kb)
+
+        def safe_update_stats(count):
+            self.run_on_ui_thread(self.update_stats, count)
         
         # 在新线程中执行搜索
         def search_thread_func():
-            results = self.searcher.search_files_parallel(
-                folder, keywords, extensions, exclude_keywords,
-                self.cache_manager,
-                self.update_progress,
-                self.display_result,
-                self.update_stats
-            )
-            # 保存当前结果供排序使用
-            self.current_results = results
-            # 重新启用搜索按钮
-            self.search_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
+            try:
+                results = self.searcher.search_files_parallel(
+                    folder, keywords, extensions, exclude_keywords,
+                    self.cache_manager,
+                    safe_update_progress,
+                    safe_display_result,
+                    safe_update_stats
+                )
+                # 保存当前结果供排序使用
+                self.current_results = results
+            except Exception as e:
+                self.run_on_ui_thread(messagebox.showerror, "错误", f"搜索过程中出错: {str(e)}")
+            finally:
+                # 重新启用搜索按钮
+                self.run_on_ui_thread(self.search_button.config, state=tk.NORMAL)
+                self.run_on_ui_thread(self.stop_button.config, state=tk.DISABLED)
         
         search_thread = threading.Thread(target=search_thread_func)
         search_thread.daemon = True
@@ -441,6 +485,9 @@ class FileFinderApp:
             self.exclude_frame.grid_forget()
             self.exclude_visible = False
             self.toggle_exclude_btn.config(text="高级选项 ▼")
+            # 恢复原始的rowconfigure权重（结果框在row=5）
+            self.main_frame.rowconfigure(5, weight=1)
+            self.main_frame.rowconfigure(6, weight=0)
             # 隐藏后恢复原始行号
             self.button_frame.grid(row=3, column=0, columnspan=3, pady=10)
             self.progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
@@ -453,6 +500,9 @@ class FileFinderApp:
             self.exclude_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), padx=0, pady=5)
             self.exclude_visible = True
             self.toggle_exclude_btn.config(text="高级选项 ▲")
+            # 更新rowconfigure权重（结果框现在在row=6）
+            self.main_frame.rowconfigure(5, weight=0)
+            self.main_frame.rowconfigure(6, weight=1)
             # 显示后调整所有元素的行号
             self.button_frame.grid(row=4, column=0, columnspan=3, pady=10)  # 搜索按钮移到row=4
             self.progress_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
@@ -505,18 +555,23 @@ class FileFinderApp:
    • 示例：输入 python test 只查找同时包含"python"和"test"的文件
 
 3. 后缀名过滤（可选）
-   • 在"后缀名"输入框输入文件扩展名来限制搜索范围
-   • 多个后缀名用空格分隔：如 .py .txt .log
-   • 可以省略点号，系统会自动添加
-   • 留空则搜索所有支持的文件类型
+    • 在"后缀名"输入框输入文件扩展名来限制搜索范围
+    • 多个后缀名用空格分隔：如 .py .txt .log
+    • 可以省略点号，系统会自动添加
+    • 留空则搜索所有支持的文件类型
 
-4. 搜索功能
+4. 排除关键字（可选）
+    • 点击“高级选项”展开“排除关键字”输入框
+    • 输入规则与关键字一致（空格分隔，支持引号）
+    • 只要包含任一排除关键字，该文件将被过滤
+
+5. 搜索功能
    • 点击"开始搜索"开始搜索文件
    • 支持停止搜索：点击"停止搜索"按钮可中断当前搜索
    • 搜索进度会实时显示
    • 找到的文件数量会在统计信息中显示
 
-5. 结果操作
+6. 结果操作
    • 搜索结果显示文件路径和文件大小
    • 右键点击结果行可进行以下操作：
      ✓ 打开文件 - 用默认程序打开选中的文件
@@ -525,7 +580,7 @@ class FileFinderApp:
      ✓ 复制文件名 - 只复制文件名到剪贴板
    • 点击"清空结果"按钮清空搜索结果列表
 
-6. 排序功能
+7. 排序功能
    • 搜索完成后，可按文件大小排序
    • "按大小升序" - 从小到大排列
    • "按大小降序" - 从大到小排列
@@ -607,9 +662,8 @@ A: 不区分，"Test"和"test"的搜索结果相同。
         )
         # 保存排除关键字
         exclude_text = self.exclude_var.get().strip()
-        if exclude_text:
-            self.config_manager.config['exclude_keywords'] = exclude_text
-            self.config_manager.save_config_to_file()
+        self.config_manager.config['exclude_keywords'] = exclude_text
+        self.config_manager.save_config_to_file()
     
     def load_config(self):
         """加载配置"""
@@ -648,9 +702,11 @@ A: 不区分，"Test"和"test"的搜索结果相同。
             self.keywords_combobox['values'] = []
             self.folder_combobox['values'] = []
             self.extensions_combobox['values'] = []
+            self.exclude_combobox['values'] = []
             self.keywords_var.set("")
             self.folder_var.set("")
             self.extensions_var.set("")
+            self.exclude_var.set("")
             
             messagebox.showinfo("成功", "缓存和配置已清理完毕，下次扫描文件夹时将重新建立缓存")
         except Exception as e:

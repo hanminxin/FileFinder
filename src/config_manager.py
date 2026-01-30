@@ -38,7 +38,13 @@ class ConfigManager:
                 return config
         except Exception:
             pass
-        return {"search_history": [], "folder_history": [], "extension_history": []}
+        return {
+            "search_history": [],
+            "folder_history": [],
+            "extension_history": [],
+            "exclude_history": [],
+            "exclude_keywords": ""
+        }
     
     def add_search_history(self, keywords):
         """添加搜索历史"""

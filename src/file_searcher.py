@@ -1,7 +1,6 @@
 """文件搜索核心模块"""
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tkinter import messagebox
 
 
 class FileSearcher:
@@ -150,8 +149,8 @@ class FileSearcher:
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
                     all_files.append(os.path.join(root, file))
-        except Exception as e:
-            messagebox.showerror("错误", f"访问文件夹时出错: {str(e)}")
+        except Exception:
+            pass
         return all_files
     
     def search_files_parallel(self, folder_path, keywords, extensions, exclude_keywords,
