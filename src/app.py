@@ -656,6 +656,7 @@ A: 不区分，"Test"和"test"的搜索结果相同。
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=2, column=0, sticky=tk.E, pady=10)
         ttk.Button(button_frame, text="清理缓存", command=self.clear_cache).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="清空历史记录", command=self.clear_history).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="关闭", command=help_window.destroy).pack(side=tk.LEFT, padx=5)
     
     def save_config(self):
@@ -695,33 +696,51 @@ A: 不区分，"Test"和"test"的搜索结果相同。
         self.update_exclude_history_ui()
     
     def clear_cache(self):
-        """清理缓存和配置"""
+        """清理文件列表缓存（不清理历史记录）"""
         import shutil
         try:
             cache_dir = os.path.join(os.path.expanduser("~"), ".file_finder_cache")
-            config_file = os.path.join(os.path.expanduser("~"), ".file_finder_config.json")
             
-            # 删除缓存目录
+            # 只删除缓存目录
             if os.path.exists(cache_dir):
                 shutil.rmtree(cache_dir)
+                messagebox.showinfo("成功", "文件列表缓存已清理，历史记录保留\n下次搜索时将重新扫描文件夹")
+            else:
+                messagebox.showinfo("提示", "缓存目录不存在，无需清理")
+        except Exception as e:
+            messagebox.showerror("错误", f"清理缓存时出错: {str(e)}")
+    
+    def clear_history(self):
+        """清空所有历史记录"""
+        result = messagebox.askyesno(
+            "确认", 
+            "确定要清空所有历史记录吗？\n\n这将清空：\n• 搜索关键字历史\n• 文件夹路径历史\n• 文件扩展名历史\n• 排除关键字历史\n\n此操作不可恢复！"
+        )
+        
+        if not result:
+            return
+        
+        try:
+            # 重置配置中的历史记录
+            self.config_manager.config["search_history"] = []
+            self.config_manager.config["folder_history"] = []
+            self.config_manager.config["extension_history"] = []
+            self.config_manager.config["exclude_history"] = []
             
-            # 删除配置文件
-            if os.path.exists(config_file):
-                os.remove(config_file)
+            # 保存配置
+            self.config_manager.save_config_to_file()
             
-            # 清空UI中的历史记录
+            # 清空UI中的下拉列表
             self.keywords_combobox['values'] = []
             self.folder_combobox['values'] = []
             self.extensions_combobox['values'] = []
             self.exclude_combobox['values'] = []
-            self.keywords_var.set("")
-            self.folder_var.set("")
-            self.extensions_var.set("")
-            self.exclude_var.set("")
             
-            messagebox.showinfo("成功", "缓存和配置已清理完毕，下次扫描文件夹时将重新建立缓存")
+            # 不清空当前输入框的内容，保留当前工作状态
+            
+            messagebox.showinfo("成功", "历史记录已清空！\n当前输入框的内容已保留")
         except Exception as e:
-            messagebox.showerror("错误", f"清理缓存时出错: {str(e)}")
+            messagebox.showerror("错误", f"清空历史记录时出错: {str(e)}")
     
     def on_closing(self):
         """程序关闭时的处理"""
