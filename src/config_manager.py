@@ -46,36 +46,60 @@ class ConfigManager:
             }
         }
         
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                
-                # 版本迁移：检查配置版本
-                config_version = config.get("version", 1)
-                
-                if config_version < 2:
-                    # 从v1迁移到v2：确保有last_search_state字段
-                    if "last_search_state" not in config:
-                        config["last_search_state"] = {
-                            "folder_path": config.get("folder_path", ""),
-                            "keywords": config.get("keywords", ""),
-                            "extensions": config.get("extensions", ""),
-                            "exclude_keywords": config.get("exclude_keywords", "")
-                        }
-                    config["version"] = 2
-                    # 保存迁移后的配置
-                    try:
-                        with open(self.config_file, 'w', encoding='utf-8') as f:
-                            json.dump(config, f, ensure_ascii=False, indent=2)
-                    except:
-                        pass
-                
-                return config
-        except Exception:
-            pass
+        if not os.path.exists(self.config_file):
+            print(f"配置文件不存在，使用默认配置: {self.config_file}")
+            return default_config
         
-        return default_config
+        try:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if not content.strip():
+                    print("配置文件为空，使用默认配置")
+                    return default_config
+                config = json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"配置文件JSON格式错误: {e}")
+            # 备份损坏的配置
+            try:
+                backup_file = self.config_file + '.broken'
+                import shutil
+                shutil.copy2(self.config_file, backup_file)
+                print(f"已备份损坏的配置到: {backup_file}")
+            except:
+                pass
+            return default_config
+        except Exception as e:
+            print(f"读取配置文件失败: {e}")
+            return default_config
+        
+        # 版本迁移：检查配置版本
+        config_version = config.get("version", 1)
+        print(f"配置文件版本: v{config_version}")
+        
+        if config_version < 2:
+            print("检测到旧版本配置，开始迁移...")
+            # 从v1迁移到v2：确保有last_search_state字段
+            if "last_search_state" not in config:
+                old_state = {
+                    "folder_path": config.get("folder_path", ""),
+                    "keywords": config.get("keywords", ""),
+                    "extensions": config.get("extensions", ""),
+                    "exclude_keywords": config.get("exclude_keywords", "")
+                }
+                config["last_search_state"] = old_state
+                print(f"迁移旧状态: folder={old_state['folder_path']}, keywords={old_state['keywords']}")
+            
+            config["version"] = 2
+            
+            # 保存迁移后的配置
+            try:
+                with open(self.config_file, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, ensure_ascii=False, indent=2)
+                print("配置迁移成功！")
+            except Exception as e:
+                print(f"保存迁移后的配置失败: {e}")
+        
+        return config
     
     def add_search_history(self, keywords):
         """添加搜索历史"""
