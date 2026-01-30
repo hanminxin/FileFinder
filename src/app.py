@@ -201,7 +201,6 @@ class FileFinderApp:
         folder = filedialog.askdirectory()
         if folder:
             self.folder_var.set(folder)
-            self.save_config()
     
     def start_search(self):
         """开始搜索"""
@@ -258,9 +257,6 @@ class FileFinderApp:
         # 禁用搜索按钮，启用停止按钮
         self.search_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
-        
-        # 保存配置
-        self.save_config()
 
         # 线程安全的UI回调
         def safe_update_progress(message, current=0, total=0):
