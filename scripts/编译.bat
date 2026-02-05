@@ -35,6 +35,8 @@ if exist "dist\FileFinder.exe" (
     echo 编译成功！
     echo 可执行文件位置: dist\FileFinder.exe
     echo ====================================
+    echo 正在打开可执行文件夹...
+    start "" "dist"
 ) else (
     echo ====================================
     echo 编译失败，请检查错误信息

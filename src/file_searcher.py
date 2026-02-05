@@ -1,6 +1,6 @@
 """文件搜索核心模块"""
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 
 class FileSearcher:
@@ -76,9 +76,48 @@ class FileSearcher:
         except Exception:
             return False
     
-    def search_file(self, filepath, keywords, exclude_keywords=None):
+    def _strip_comments_stream(self, text, in_comment):
+        """按行移除$后注释内容，支持跨块的注释状态"""
+        if not in_comment and '$' not in text:
+            return text, False
+
+        lines = text.splitlines(keepends=True)
+        out = []
+        for line in lines:
+            # 保留原始行结尾
+            line_ending = ""
+            if line.endswith("\r\n"):
+                line_ending = "\r\n"
+            elif line.endswith("\n"):
+                line_ending = "\n"
+            elif line.endswith("\r"):
+                line_ending = "\r"
+
+            if in_comment:
+                # 跳过注释直到遇到行结束
+                if line_ending:
+                    out.append(line_ending)
+                    in_comment = False
+                continue
+
+            if '$' in line:
+                before, _, _ = line.partition('$')
+                out.append(before)
+                if line_ending:
+                    out.append(line_ending)
+                    in_comment = False
+                else:
+                    in_comment = True
+            else:
+                out.append(line)
+
+        return "".join(out), in_comment
+
+    def search_file(self, filepath, keywords, exclude_keywords=None, ignore_comments=False):
         """在单个文件中搜索所有关键字，并排除包含排除关键字的文件（高性能版）"""
         try:
+            if not self.is_searching:
+                return None
             # 快速检查文件扩展名，跳过明显的二进制文件
             ext = os.path.splitext(filepath)[1].lower()
             if ext in {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar', 
@@ -103,55 +142,97 @@ class FileSearcher:
             overlap_size = 1024  # 1KB重叠区防止跨块匹配
             
             found_keywords = set()
-            found_exclude = False
             previous_chunk = b''
+            in_comment = False
+            tail_text = ""
             
             try:
                 with open(filepath, 'rb') as f:
                     while True:
+                        if not self.is_searching:
+                            return None
                         chunk = f.read(chunk_size)
                         if not chunk:
                             break
                         
-                        # 与上一块的尾部合并，避免跨块匹配丢失
-                        search_chunk = previous_chunk + chunk
-                        
-                        # 快速二进制文件检测（只检查第一块）
-                        if not previous_chunk and ext != '.dat':
-                            null_count = search_chunk[:8192].count(b'\x00')
-                            if null_count > 100:
-                                return None
-                        
-                        # 尝试解码（UTF-8优先，失败则用latin-1保证不出错）
-                        try:
-                            text = search_chunk.decode('utf-8', errors='ignore').lower()
-                        except:
-                            try:
-                                text = search_chunk.decode('gbk', errors='ignore').lower()
-                            except:
-                                text = search_chunk.decode('latin-1').lower()
-                        
-                        # 先检查排除关键字（如果有）- 一旦找到立即返回
-                        if exclude_keywords_lower:
-                            for exclude_kw in exclude_keywords_lower:
-                                if exclude_kw in text:
+                        if not ignore_comments:
+                            # 与上一块的尾部合并，避免跨块匹配丢失
+                            search_chunk = previous_chunk + chunk
+                            
+                            # 快速二进制文件检测（只检查第一块）
+                            if not previous_chunk and ext != '.dat':
+                                null_count = search_chunk[:8192].count(b'\x00')
+                                if null_count > 100:
                                     return None
-                        
-                        # 检查所有待查找的关键字
-                        for kw in keywords_lower:
-                            if kw not in found_keywords and kw in text:
-                                found_keywords.add(kw)
-                        
-                        # 所有关键字都找到了，提前返回
-                        if len(found_keywords) == len(keywords_lower):
-                            size_kb = file_size / 1024
-                            return (filepath, size_kb)
-                        
-                        # 保存块尾部用于下次合并
-                        if len(chunk) == chunk_size:  # 不是最后一块
-                            previous_chunk = search_chunk[-overlap_size:]
+                            
+                            # 尝试解码（UTF-8优先，失败则用latin-1保证不出错）
+                            try:
+                                text = search_chunk.decode('utf-8', errors='ignore').lower()
+                            except:
+                                try:
+                                    text = search_chunk.decode('gbk', errors='ignore').lower()
+                                except:
+                                    text = search_chunk.decode('latin-1').lower()
+                            
+                            # 先检查排除关键字（如果有）- 一旦找到立即返回
+                            if exclude_keywords_lower:
+                                for exclude_kw in exclude_keywords_lower:
+                                    if exclude_kw in text:
+                                        return None
+                            
+                            # 检查所有待查找的关键字
+                            for kw in keywords_lower:
+                                if kw not in found_keywords and kw in text:
+                                    found_keywords.add(kw)
+                            
+                            # 所有关键字都找到了，提前返回
+                            if len(found_keywords) == len(keywords_lower):
+                                size_kb = file_size / 1024
+                                return (filepath, size_kb)
+                            
+                            # 保存块尾部用于下次合并
+                            if len(chunk) == chunk_size:  # 不是最后一块
+                                previous_chunk = search_chunk[-overlap_size:]
+                            else:
+                                break
                         else:
-                            break
+                            # 忽略注释模式：按行移除$后的内容
+                            if ext != '.dat' and not previous_chunk:
+                                null_count = chunk[:8192].count(b'\x00')
+                                if null_count > 100:
+                                    return None
+                            
+                            try:
+                                text = chunk.decode('utf-8', errors='ignore')
+                            except:
+                                try:
+                                    text = chunk.decode('gbk', errors='ignore')
+                                except:
+                                    text = chunk.decode('latin-1')
+                            
+                            text, in_comment = self._strip_comments_stream(text, in_comment)
+                            if not text and not in_comment:
+                                continue
+                            
+                            searchable = (tail_text + text).lower()
+                            
+                            if exclude_keywords_lower:
+                                for exclude_kw in exclude_keywords_lower:
+                                    if exclude_kw in searchable:
+                                        return None
+                            
+                            for kw in keywords_lower:
+                                if kw not in found_keywords and kw in searchable:
+                                    found_keywords.add(kw)
+                            
+                            if len(found_keywords) == len(keywords_lower):
+                                size_kb = file_size / 1024
+                                return (filepath, size_kb)
+                            
+                            if len(searchable) > overlap_size:
+                                tail_text = searchable[-overlap_size:]
+                            else:
+                                tail_text = searchable
             except:
                 return None
             
@@ -177,6 +258,7 @@ class FileSearcher:
         return all_files
     
     def search_files_parallel(self, folder_path, keywords, extensions, exclude_keywords,
+                            ignore_comments,
                             cache_manager,
                             progress_callback, result_callback, stats_callback):
         """并行搜索文件（每次都重新搜索内容，仅缓存文件列表）"""
@@ -218,32 +300,44 @@ class FileSearcher:
         for filepath in all_files:
             if not self.is_searching:
                 break
-            future = self.executor.submit(self.search_file, filepath, keywords, exclude_keywords)
+            future = self.executor.submit(self.search_file, filepath, keywords, exclude_keywords, ignore_comments)
             futures.append(future)
         
         # 收集结果（优化进度更新频率）
         update_interval = max(1, total_files // 100)  # 最多更新100次
-        for future in as_completed(futures):
+        pending = set(futures)
+        while pending:
             if not self.is_searching:
+                for future in pending:
+                    future.cancel()
                 break
-            
-            processed += 1
-            result = future.result()
-            
-            if result:
-                filepath, size_kb = result
-                found_count += 1
-                search_results.append((filepath, size_kb))
-                result_callback(filepath, size_kb)
-                stats_callback(found_count)
-            
-            # 减少进度更新频率（每处理多个文件更新一次，或找到结果时立即更新）
-            if processed % update_interval == 0 or result or processed == total_files:
-                progress_callback(f"已搜索 {processed}/{total_files} 个文件，找到 {found_count} 个", processed, total_files)
-        
-        progress_callback(f"搜索完成！共处理 {processed} 个文件，找到 {found_count} 个匹配文件", processed, total_files)
+
+            done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+            for future in done:
+                if not self.is_searching:
+                    continue
+
+                processed += 1
+                result = future.result()
+
+                if result:
+                    filepath, size_kb = result
+                    found_count += 1
+                    search_results.append((filepath, size_kb))
+                    result_callback(filepath, size_kb)
+                    stats_callback(found_count)
+
+                # 减少进度更新频率（每处理多个文件更新一次，或找到结果时立即更新）
+                if processed % update_interval == 0 or result or processed == total_files:
+                    progress_callback(f"已搜索 {processed}/{total_files} 个文件，找到 {found_count} 个", processed, total_files)
+
+        if self.is_searching:
+            progress_callback(f"搜索完成！共处理 {processed} 个文件，找到 {found_count} 个匹配文件", processed, total_files)
+        else:
+            progress_callback(f"搜索已停止，共处理 {processed} 个文件，找到 {found_count} 个匹配文件", processed, total_files)
+
         self.is_searching = False
-        
+
         return search_results
     
     def stop_search(self):

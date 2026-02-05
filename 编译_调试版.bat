@@ -33,6 +33,8 @@ if exist "dist\FileFinder_Debug.exe" (
     echo 编译成功！
     echo 可执行文件位置: dist\FileFinder_Debug.exe
     echo ====================================
+    echo 正在打开可执行文件夹...
+    start "" "dist"
     echo.
     echo 运行此版本时会显示控制台窗口，可以看到：
     echo - 配置文件加载信息

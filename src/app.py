@@ -116,6 +116,13 @@ class FileFinderApp:
         self.exclude_combobox = ttk.Combobox(self.exclude_frame, textvariable=self.exclude_var, width=58)
         self.exclude_combobox.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
         ttk.Label(self.exclude_frame, text='(空格分隔，匹配任一关键字则排除)').grid(row=0, column=2, sticky=tk.W, pady=5)
+
+        self.ignore_comments_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            self.exclude_frame,
+            text='忽略注释（每行“$”后内容）',
+            variable=self.ignore_comments_var
+        ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=2)
         
         # 搜索按钮
         button_frame = ttk.Frame(main_frame)
@@ -268,11 +275,14 @@ class FileFinderApp:
         def safe_update_stats(count):
             self.run_on_ui_thread(self.update_stats, count)
         
+        ignore_comments = self.ignore_comments_var.get()
+
         # 在新线程中执行搜索
         def search_thread_func():
             try:
                 results = self.searcher.search_files_parallel(
                     folder, keywords, extensions, exclude_keywords,
+                    ignore_comments,
                     self.cache_manager,
                     safe_update_progress,
                     safe_display_result,
@@ -521,7 +531,7 @@ class FileFinderApp:
     def show_help(self):
         """显示帮助窗口"""
         help_window = tk.Toplevel(self.root)
-        help_window.title("帮助")
+        help_window.title("使用说明")
         help_window.geometry("700x750")
         help_window.resizable(True, True)
         
@@ -532,7 +542,7 @@ class FileFinderApp:
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
         
-        title_label = ttk.Label(main_frame, text="文件搜索工具 - 功能说明", font=("Arial", 13, "bold"))
+        title_label = ttk.Label(main_frame, text="文件搜索工具 - 使用说明", font=("Arial", 13, "bold"))
         title_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
         
         text_frame = ttk.Frame(main_frame)
@@ -544,110 +554,27 @@ class FileFinderApp:
         help_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         help_text.config(state=tk.NORMAL)
         
-        help_content = """【基本功能】
+        help_content = """【快速上手】
 
-1. 文件夹选择
-   • 点击"浏览..."按钮选择要搜索的文件夹
-   • 支持递归搜索所有子文件夹中的文件
-   • 路径会自动保存供下次使用
+1. 选择文件夹 → 输入关键字 → 点击“开始搜索”。
+2. 多个关键字用空格分隔，需全部匹配；引号可包住短语。
+3. 后缀名可选：如 .py .txt .log；留空表示全部。
 
-2. 关键字搜索
-   • 在"关键字"输入框输入要搜索的文本
-   • 多个关键字用空格分隔，需全部匹配（AND逻辑）
-   • 使用引号包裹短语：如 "hello world" 或 "hello world" 作为整体搜索
-   • 支持中英文引号：英文 ""  ''  或中文 ""  ''
-   • 搜索不区分大小写
-   • 示例：输入 python test 只查找同时包含"python"和"test"的文件
+【高级选项】
 
-3. 后缀名过滤（可选）
-    • 在"后缀名"输入框输入文件扩展名来限制搜索范围
-    • 多个后缀名用空格分隔：如 .py .txt .log
-    • 可以省略点号，系统会自动添加
-    • 留空则搜索所有支持的文件类型
+• 排除关键字：包含任一排除词的文件会被过滤。
+• 忽略注释：勾选后，忽略每行“$”后的内容。
 
-4. 排除关键字（可选）
-    • 点击“高级选项”展开“排除关键字”输入框
-    • 输入规则与关键字一致（空格分隔，支持引号）
-    • 只要包含任一排除关键字，该文件将被过滤
+【结果操作】
 
-5. 搜索功能
-   • 点击"开始搜索"开始搜索文件
-   • 支持停止搜索：点击"停止搜索"按钮可中断当前搜索
-   • 搜索进度会实时显示
-   • 找到的文件数量会在统计信息中显示
+• 右键结果可打开文件/打开所在文件夹/复制路径。
+• 支持按文件大小升序/降序排序。
 
-6. 结果操作
-   • 搜索结果显示文件路径和文件大小
-   • 右键点击结果行可进行以下操作：
-     ✓ 打开文件 - 用默认程序打开选中的文件
-     ✓ 打开所在文件夹 - 在资源管理器中定位该文件
-     ✓ 复制文件路径 - 复制完整的文件路径到剪贴板
-     ✓ 复制文件名 - 只复制文件名到剪贴板
-   • 点击"清空结果"按钮清空搜索结果列表
+【提示】
 
-7. 排序功能
-   • 搜索完成后，可按文件大小排序
-   • "按大小升序" - 从小到大排列
-   • "按大小降序" - 从大到小排列
-
-【自动缓存机制】
-
-• 系统会自动缓存文件列表以加速文件夹扫描
-• 当文件夹内容发生变化（增删改文件）时，自动更新缓存
-• 每次搜索都会重新检查文件内容，确保结果准确
-• 缓存存储在用户主目录下的 .file_finder_cache 文件夹
-• 无需手动管理，系统自动维护
-
-【支持的文件类型】
-
-• 文本格式：.txt, .log, .csv, .json, .xml, .yaml, .toml, .ini
-• 代码文件：.py, .java, .cpp, .c, .js, .html, .css, .php, .rb, .go
-• 文档格式：.md, .doc, .txt
-• 混合型文件：.dat等（使用二进制搜索）
-• 自动过滤：图片、视频、压缩包等常见二进制文件
-
-【编码支持】
-
-• 自动检测文件编码：UTF-8, GBK, GB2312, Latin-1, CP1252
-• 智能处理不同编码的文件
-• 支持中文、英文等多种语言
-• 对二进制混合文件使用字节级搜索
-
-【使用提示】
-
-• 首次扫描某个文件夹时会建立文件列表缓存，加速后续搜索
-• 系统会自动检测文件夹变化并更新缓存，无需手动操作
-• 使用后缀名过滤可以大幅减少搜索范围，提高搜索速度
-• 配置信息（路径、关键字、后缀名）会自动保存，下次打开时恢复
-• 使用多个关键字可以精确定位目标文件
-
-【故障排除】
-
-如果遇到问题：
-1. 检查文件夹路径是否正确且有访问权限
-2. 确认关键字拼写正确
-3. 检查后缀名格式是否正确（如 .py 而非 py.）
-4. 如果文件编码特殊，可能无法被识别
-
-【常见问题】
-
-Q: 为什么第一次搜索较慢？
-A: 首次需要扫描文件夹建立文件列表，后续会使用缓存加速。
-
-Q: 缓存占用多少空间？
-A: 非常小，通常几KB到几十KB，仅存储文件路径列表。
-
-Q: 能否搜索二进制文件？
-A: 支持混合型二进制文件（如.dat），纯二进制文件会被自动过滤。
-
-Q: 多个关键字如何工作？
-A: 文件需要同时包含所有关键字才会显示（AND逻辑）。
-
-Q: 搜索会缓存结果吗？
-A: 不会。系统只缓存文件列表，每次搜索都重新检查文件内容。
-
-Q: 搜索区分大小写吗？
-A: 不区分，"Test"和"test"的搜索结果相同。
+• 第一次搜索较慢是正常的，会自动缓存文件列表。
+• 搜索不区分大小写。
+• Esc 可停止搜索。
 """
         
         help_text.insert(tk.END, help_content)
@@ -687,7 +614,8 @@ A: 不区分，"Test"和"test"的搜索结果相同。
         self.folder_var.set(last_state.get("folder_path", ""))
         self.keywords_var.set(last_state.get("keywords", ""))
         self.extensions_var.set(last_state.get("extensions", ""))
-        self.exclude_var.set(last_state.get("exclude_keywords", ""))
+        # 排除关键字不自动恢复上次输入
+        self.exclude_var.set("")
         
         # 加载搜索历史到下拉框
         self.update_search_history()
