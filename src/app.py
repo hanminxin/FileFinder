@@ -52,6 +52,57 @@ class FileFinderApp:
     def run_on_ui_thread(self, func, *args, **kwargs):
         """将UI更新任务投递到主线程"""
         self.ui_queue.put((func, args, kwargs))
+    
+    def _enable_undo(self, combobox):
+        """为 Combobox 启用撤销/重做功能"""
+        # 获取 Combobox 内部的 Entry 控件
+        entry = combobox
+        
+        # 初始化撤销栈
+        if not hasattr(self, '_undo_stacks'):
+            self._undo_stacks = {}
+            self._redo_stacks = {}
+        
+        self._undo_stacks[entry] = []
+        self._redo_stacks[entry] = []
+        
+        # 记录初始值
+        def record_change(event=None):
+            current = combobox.get()
+            stack = self._undo_stacks[entry]
+            if not stack or stack[-1] != current:
+                stack.append(current)
+                # 限制栈大小
+                if len(stack) > 50:
+                    stack.pop(0)
+                # 清空重做栈
+                self._redo_stacks[entry].clear()
+        
+        # 撤销操作
+        def undo(event=None):
+            stack = self._undo_stacks[entry]
+            redo_stack = self._redo_stacks[entry]
+            if len(stack) > 1:
+                current = stack.pop()
+                redo_stack.append(current)
+                combobox.set(stack[-1])
+            return "break"
+        
+        # 重做操作
+        def redo(event=None):
+            redo_stack = self._redo_stacks[entry]
+            stack = self._undo_stacks[entry]
+            if redo_stack:
+                value = redo_stack.pop()
+                stack.append(value)
+                combobox.set(value)
+            return "break"
+        
+        # 绑定事件
+        combobox.bind('<KeyRelease>', record_change)
+        combobox.bind('<Control-z>', undo)
+        combobox.bind('<Control-y>', redo)
+        combobox.bind('<Control-Shift-Z>', redo)
 
     def process_ui_queue(self):
         """处理UI队列中的任务"""
@@ -87,6 +138,7 @@ class FileFinderApp:
         self.folder_var = tk.StringVar()
         self.folder_combobox = ttk.Combobox(main_frame, textvariable=self.folder_var, width=58)
         self.folder_combobox.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
+        self._enable_undo(self.folder_combobox)
         ttk.Button(main_frame, text="浏览...", command=self.browse_folder).grid(row=0, column=2, padx=5, pady=5)
         
         # 关键字输入（改为下拉框）
@@ -94,6 +146,7 @@ class FileFinderApp:
         self.keywords_var = tk.StringVar()
         self.keywords_combobox = ttk.Combobox(main_frame, textvariable=self.keywords_var, width=58)
         self.keywords_combobox.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
+        self._enable_undo(self.keywords_combobox)
         ttk.Label(main_frame, text='(空格分隔，引号包裹短语如"hello world")').grid(row=1, column=2, sticky=tk.W, pady=5)
         
         # 后缀名过滤（下拉历史）
@@ -101,6 +154,7 @@ class FileFinderApp:
         self.extensions_var = tk.StringVar()
         self.extensions_combobox = ttk.Combobox(main_frame, textvariable=self.extensions_var, width=58)
         self.extensions_combobox.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
+        self._enable_undo(self.extensions_combobox)
         ttk.Label(main_frame, text='(可选，多个用空格分隔如: .py .txt .log)').grid(row=2, column=2, sticky=tk.W, pady=5)
         
         # 排除关键字框（初始隐藏）
@@ -115,6 +169,7 @@ class FileFinderApp:
         self.exclude_var = tk.StringVar()
         self.exclude_combobox = ttk.Combobox(self.exclude_frame, textvariable=self.exclude_var, width=58)
         self.exclude_combobox.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=5)
+        self._enable_undo(self.exclude_combobox)
         ttk.Label(self.exclude_frame, text='(空格分隔，匹配任一关键字则排除)').grid(row=0, column=2, sticky=tk.W, pady=5)
 
         self.ignore_comments_var = tk.BooleanVar(value=False)

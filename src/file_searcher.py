@@ -7,8 +7,8 @@ class FileSearcher:
     """文件搜索引擎（优化版）"""
     
     def __init__(self, max_workers=None):
-        # 大幅增加线程数以提高并行度（I/O密集型任务，CPU核心数的4-8倍）
-        default_workers = (os.cpu_count() or 4) * 8
+        # 大幅增加线程数以提高并行度（I/O密集型任务，CPU核心数的8-12倍）
+        default_workers = (os.cpu_count() or 4) * 12
         self.executor = ThreadPoolExecutor(max_workers=max_workers or default_workers)
         self.is_searching = False
     
@@ -138,7 +138,7 @@ class FileSearcher:
             exclude_keywords_lower = [kw.lower() for kw in exclude_keywords] if exclude_keywords else []
             
             # 使用流式读取和快速搜索算法
-            chunk_size = 65536  # 64KB块
+            chunk_size = 131072  # 128KB块，提高I/O效率
             overlap_size = 1024  # 1KB重叠区防止跨块匹配
             
             found_keywords = set()
@@ -161,18 +161,17 @@ class FileSearcher:
                             
                             # 快速二进制文件检测（只检查第一块）
                             if not previous_chunk and ext != '.dat':
-                                null_count = search_chunk[:8192].count(b'\x00')
-                                if null_count > 100:
+                                # 只检查前4KB，减少检测开销
+                                sample = search_chunk[:4096]
+                                null_count = sample.count(b'\x00')
+                                if null_count > 50:
                                     return None
                             
-                            # 尝试解码（UTF-8优先，失败则用latin-1保证不出错）
+                            # 尝试解码（UTF-8优先，简化错误处理）
                             try:
                                 text = search_chunk.decode('utf-8', errors='ignore').lower()
                             except:
-                                try:
-                                    text = search_chunk.decode('gbk', errors='ignore').lower()
-                                except:
-                                    text = search_chunk.decode('latin-1').lower()
+                                text = search_chunk.decode('latin-1', errors='ignore').lower()
                             
                             # 先检查排除关键字（如果有）- 一旦找到立即返回
                             if exclude_keywords_lower:
@@ -277,9 +276,10 @@ class FileSearcher:
         else:
             progress_callback(f"使用缓存文件列表，共 {len(all_files)} 个文件", 0, 0)
         
-        # 根据后缀名过滤文件
+        # 根据后缀名过滤文件（优化：提前转换扩展名集合）
         if extensions:
-            filtered_files = [f for f in all_files if os.path.splitext(f)[1].lower() in extensions]
+            ext_set = set(ext.lower() for ext in extensions)
+            filtered_files = [f for f in all_files if os.path.splitext(f)[1].lower() in ext_set]
             progress_callback(f"后缀名过滤：{len(all_files)} → {len(filtered_files)} 个文件", 0, 0)
             all_files = filtered_files
         
@@ -292,16 +292,17 @@ class FileSearcher:
         
         progress_callback(f"准备搜索 {total_files} 个文件...", 0, total_files)
         
-        # 并行处理文件
+        # 并行处理文件（批量提交任务）
         processed = 0
-        futures = []
         search_results = []
         
-        for filepath in all_files:
-            if not self.is_searching:
-                break
-            future = self.executor.submit(self.search_file, filepath, keywords, exclude_keywords, ignore_comments)
-            futures.append(future)
+        # 批量提交所有任务，减少提交开销
+        if not self.is_searching:
+            self.is_searching = False
+            return []
+        
+        futures = [self.executor.submit(self.search_file, filepath, keywords, exclude_keywords, ignore_comments) 
+                   for filepath in all_files]
         
         # 收集结果（优化进度更新频率）
         update_interval = max(1, total_files // 100)  # 最多更新100次

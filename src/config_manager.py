@@ -212,12 +212,14 @@ class ConfigManager:
         history = history[:10]
 
         config["exclude_history"] = history
+        self.config["exclude_history"] = history  # 更新内存中的配置
 
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+            logger.info(f"已保存排除关键字历史: {text}")
+        except Exception as e:
+            logger.error(f"保存排除关键字历史失败: {e}")
     
     def save_config_to_file(self):
         """直接将当前配置保存到文件（带重试和备份）"""
